@@ -1,6 +1,7 @@
 {
   "name": "treino-bot",
   "version": "1.0.0",
+  "type": "commonjs",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
