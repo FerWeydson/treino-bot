@@ -1,7 +1,6 @@
 {
   "name": "treino-bot",
   "version": "1.0.0",
-  "type": "commonjs",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -11,11 +10,11 @@
   "dependencies": {
     "fastify": "^5.2.1",
     "dotenv": "^16.5.0",
-    "zod": "^3.25.23"
+    "zod": "^3.25.23",
+    "@types/node": "^22.15.21",
+    "typescript": "^5.8.3"
   },
   "devDependencies": {
-    "@types/node": "^22.15.21",
-    "tsx": "^4.19.4",
-    "typescript": "^5.8.3"
+    "tsx": "^4.19.4"
   }
 }
