@@ -17,7 +17,7 @@ const groq = new Groq({ apiKey: env.GROQ_API_KEY });
 
 export async function askAI(prompt: string): Promise<string> {
   const message = await groq.chat.completions.create({
-    model: 'llama-3.1-70b-versatile',
+    model: 'llama-3.1-8b-instant',
     max_tokens: 1024,
     messages: [
       {
