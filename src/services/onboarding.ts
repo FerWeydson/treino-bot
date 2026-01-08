@@ -6,6 +6,17 @@ import { z } from 'zod';
 
 type OnboardingStep = 'initial' | 'weight_height' | 'routine' | 'objective' | 'complete';
 
+function extractJSON(text: string): string {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  
+  if (start === -1 || end === -1) {
+    throw new Error('Nenhum JSON encontrado na resposta');
+  }
+  
+  return text.substring(start, end + 1);
+}
+
 const weightHeightSchema = z.object({
   weight: z.coerce.number().positive(),
   height: z.coerce.number().positive(),
@@ -23,6 +34,12 @@ export async function getOnboardingStep(userId: string): Promise<OnboardingStep>
 
   if (!user) return 'initial';
   if (user.onboardingComplete === 'true') return 'complete';
+  
+  // Se onboarding está incompleto e nenhum dado preenchido, reiniciar
+  if (user.onboardingComplete === 'false' && !user.weight && !user.height && !user.weeklyRoutine && !user.objective) {
+    return 'initial';
+  }
+  
   if (!user.weight || !user.height) return 'weight_height';
   if (!user.weeklyRoutine) return 'routine';
   if (!user.objective) return 'objective';
@@ -42,11 +59,22 @@ export async function handleOnboarding(userId: string, userMessage: string): Pro
       };
 
     case 'weight_height': {
+      // Validar se mensagem contém números antes de chamar IA
+      if (!/\d/.test(userMessage)) {
+        return {
+          response: `❌ Não foi possível processar sua solicitação`,
+          step: 'weight_height',
+        };
+      }
+
       const prompt = `Extraia peso (kg) e altura (cm) desta mensagem: "${userMessage}"\nRetorne APENAS JSON válido: {"weight": número, "height": número}\nEx: {"weight": 75, "height": 180}`;
       
       try {
         const response = await askAI(prompt);
-        const data = weightHeightSchema.parse(JSON.parse(response));
+        console.log('🤖 Resposta IA (weight_height):', response);
+        
+        const jsonStr = extractJSON(response);
+        const data = weightHeightSchema.parse(JSON.parse(jsonStr));
 
         await db
           .update(users)
@@ -71,7 +99,10 @@ export async function handleOnboarding(userId: string, userMessage: string): Pro
       
       try {
         const response = await askAI(prompt);
-        const routine = routineSchema.parse(JSON.parse(response));
+        console.log('🤖 Resposta IA (routine):', response);
+        
+        const jsonStr = extractJSON(response);
+        const routine = routineSchema.parse(JSON.parse(jsonStr));
 
         if (Object.keys(routine).length > 0) {
           await db
