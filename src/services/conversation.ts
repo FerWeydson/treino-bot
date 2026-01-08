@@ -1,7 +1,15 @@
 import { db } from '../db';
-import { users, workouts, sets } from '../db/schema';
+import { users, workouts, sets, messages } from '../db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { askAI } from './ai';
+import fs from 'fs';
+import path from 'path';
+
+// Carrega prompt do sistema uma única vez
+const SYSTEM_PROMPT = fs.readFileSync(
+  path.join(__dirname, '..', 'prompts', 'system.md'),
+  'utf-8'
+);
 
 export async function handleConversation(userId: string, userMessage: string): Promise<string> {
   // Buscar usuário
@@ -16,7 +24,15 @@ export async function handleConversation(userId: string, userMessage: string): P
     throw new Error('Usuário não encontrado');
   }
 
-  // Buscar últimas mensagens para contexto
+  // Buscar últimas 5 mensagens para contexto de conversa
+  const recentMessages = await db
+    .select()
+    .from(messages)
+    .where(eq(messages.userId, userId))
+    .orderBy(desc(messages.receivedAt))
+    .limit(5);
+
+  // Buscar últimos 3 treinos completos com exercícios
   const recentWorkouts = await db
     .select()
     .from(workouts)
@@ -24,35 +40,64 @@ export async function handleConversation(userId: string, userMessage: string): P
     .orderBy(desc(workouts.date))
     .limit(3);
 
-  // Montar contexto do usuário
-  const userContext = `
-Perfil do usuário:
-- Peso: ${user.weight || 'não informado'}
-- Altura: ${user.height || 'não informado'}
-- Objetivo: ${user.objective || 'não informado'}
-- Rotina semanal: ${user.weeklyRoutine ? JSON.stringify(user.weeklyRoutine) : 'não informada'}
-- Últimos treinos: ${recentWorkouts.length} registrados
-`;
+  // Buscar sets dos últimos treinos
+  const workoutIds = recentWorkouts.map(w => w.id);
+  let workoutSets: any[] = [];
+  if (workoutIds.length > 0) {
+    workoutSets = await db
+      .select()
+      .from(sets)
+      .where(eq(sets.workoutId, workoutIds[0]))
+      .orderBy(sets.orderIndex);
+  }
 
-  // Prompt para IA conversacional
-  const prompt = `Você é um assistente pessoal de treinos. Converse naturalmente em português do Brasil.
+  // Montar contexto do perfil do usuário
+  const hasProfile = user.weight && user.height;
+  const profileContext = hasProfile
+    ? `**PERFIL JÁ CADASTRADO:**
+- Peso: ${user.weight}kg
+- Altura: ${user.height}cm
+- Objetivo: ${user.objective || 'ainda não definido'}
+- Rotina: ${user.weeklyRoutine ? JSON.stringify(user.weeklyRoutine) : 'ainda não definida'}`
+    : `**PERFIL AINDA NÃO CADASTRADO** - pergunte peso e altura`;
 
-${userContext}
+  // Montar histórico de conversas
+  const conversationHistory = recentMessages
+    .reverse()
+    .map(msg => `Usuário: ${msg.body}`)
+    .join('\n');
 
-INSTRUÇÕES:
-1. Se o usuário fornecer peso/altura, extraia e retorne no formato: [SAVE_PROFILE]{"weight": X, "height": Y}[/SAVE_PROFILE]
-2. Se o usuário enviar um treino (ex: "fiz supino 3x10 60kg"), extraia e retorne no formato: [SAVE_WORKOUT][{"exercise": "supino", "sets": 3, "reps": 10, "weight": 60}][/SAVE_WORKOUT]
-3. Se o usuário informar objetivo, extraia: [SAVE_OBJECTIVE]texto do objetivo[/SAVE_OBJECTIVE]
-4. Se o usuário informar rotina semanal, extraia: [SAVE_ROUTINE]{"monday": "peito", ...}[/SAVE_ROUTINE]
-5. Sempre responda de forma amigável e natural
-6. Após extrair dados, confirme e incentive
+  // Montar histórico de treinos
+  const workoutsHistory = recentWorkouts.length > 0
+    ? recentWorkouts.map(w => {
+        const date = new Date(w.date).toLocaleDateString('pt-BR');
+        return `${date}: ${w.notes || 'treino registrado'}`;
+      }).join('\n')
+    : 'Nenhum treino registrado ainda';
 
-Mensagem do usuário: "${userMessage}"
+  // Montar prompt completo
+  const fullPrompt = `${SYSTEM_PROMPT}
 
-Responda conversacionalmente e inclua os marcadores de dados quando identificar informações.`;
+---
+
+## CONTEXTO ATUAL
+
+${profileContext}
+
+### Últimas 5 mensagens:
+${conversationHistory || 'Primeira conversa'}
+
+### Últimos 3 treinos:
+${workoutsHistory}
+
+---
+
+**Mensagem atual do usuário:** "${userMessage}"
+
+**Sua resposta:**`;
 
   try {
-    const aiResponse = await askAI(prompt);
+    const aiResponse = await askAI(fullPrompt);
     console.log('🤖 Resposta IA completa:', aiResponse);
 
     // Processar resposta e extrair dados para salvar
