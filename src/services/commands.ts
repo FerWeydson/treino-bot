@@ -2,6 +2,8 @@ import { db } from '../db';
 import { workouts, sets } from '../db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { parserWorkoutMessage } from './parser';
+import { analyzeEvolution } from './analyzer';
+import { getOnboardingStep, handleOnboarding } from './onboarding';
 
 export interface CommandResult {
     response: string;
@@ -9,13 +11,20 @@ export interface CommandResult {
 }
 
 export async function processMessage(userId: string, message: string): Promise<CommandResult> {
-    const trimmed = message.trim();
-    
-    if(trimmed.startsWith('/help')) {
-        return handleCommand(userId, trimmed);
-    }
-    return handleWorkoutRegistration(userId, trimmed);
-    
+  const trimmed = message.trim();
+
+  // Checkar onboarding
+  const onboardingStep = await getOnboardingStep(userId);
+  if (onboardingStep !== 'complete') {
+    const result = await handleOnboarding(userId, trimmed);
+    return { success: true, response: result.response };
+  }
+
+  if (trimmed.startsWith('/')) {
+    return handleCommand(userId, trimmed);
+  }
+
+  return handleWorkoutRegistration(userId, trimmed);
 }
 
 async function handleCommand(userId: string, message: string): Promise<CommandResult> {
@@ -50,7 +59,7 @@ async function handleWorkoutRegistration(userId: string, message: string): Promi
   if (!parseResult.success) {
     return {
       success: false,
-      response: `Não consegui entender o treino.\n\n${parseResult.errors.join('\n')}`,
+      response: `❌ Não consegui entender o treino.\n\n${parseResult.errors.join('\n')}`,
     };
   }
 
@@ -81,13 +90,16 @@ async function handleWorkoutRegistration(userId: string, message: string): Promi
       })
       .join('\n');
 
+    // Análise de evolução
+    const evolution = await analyzeEvolution(userId, parseResult.exercises);
+
     return {
       success: true,
-      response: `*Treino registrado!*\n\n${list}`,
+      response: `✅ *Treino registrado!*\n\n${list}\n\n📊 *Evolução:*\n${evolution}`,
     };
   } catch (err) {
     console.error('Erro ao salvar treino:', err);
-    return { success: false, response: 'Erro ao salvar treino' };
+    return { success: false, response: '❌ Erro ao salvar treino' };
   }
 }
 

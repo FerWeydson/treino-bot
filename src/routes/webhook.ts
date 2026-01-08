@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { db } from '../db';
 import { users, messages } from '../db/schema';
 import { eq } from 'drizzle-orm';
-import { processMessage } from '../services/command';
+import { processMessage } from '../services/commands';
 
 const twilioSchema = z.object({
   MessageSid: z.string(),
