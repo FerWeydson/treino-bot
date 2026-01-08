@@ -43,13 +43,13 @@ async function handleCommand(userId: string, message: string): Promise<CommandRe
     case '/historico': {
       const exerciseName = args.join(' ');
       if (!exerciseName) {
-        return { success: false, response: '/historico <exercício>' };
+        return { success: true, response: '❌ Não foi possível processar sua solicitação' };
       }
       return getExerciseHistory(userId, exerciseName);
     }
 
     default:
-      return { success: false, response: `Comando desconhecido: ${command}` };
+      return { success: true, response: '❌ Não foi possível processar sua solicitação' };
   }
 }
 
@@ -58,8 +58,8 @@ async function handleWorkoutRegistration(userId: string, message: string): Promi
 
   if (!parseResult.success) {
     return {
-      success: false,
-      response: `❌ Não consegui entender o treino.\n\n${parseResult.errors.join('\n')}`,
+      success: true,
+      response: '❌ Não foi possível processar sua solicitação',
     };
   }
 
@@ -99,7 +99,7 @@ async function handleWorkoutRegistration(userId: string, message: string): Promi
     };
   } catch (err) {
     console.error('Erro ao salvar treino:', err);
-    return { success: false, response: '❌ Erro ao salvar treino' };
+    return { success: true, response: '❌ Não foi possível processar sua solicitação' };
   }
 }
 
@@ -135,7 +135,7 @@ async function getLastWorkout(userId: string): Promise<CommandResult> {
     };
   } catch (err) {
     console.error('Erro ao buscar último treino:', err);
-    return { success: false, response: 'Erro ao buscar último treino' };
+    return { success: true, response: '❌ Não foi possível processar sua solicitação' };
   }
 }
 
@@ -165,6 +165,6 @@ async function getExerciseHistory(userId: string, exerciseName: string): Promise
     };
   } catch (err) {
     console.error('Erro ao buscar histórico:', err);
-    return { success: false, response: 'Erro ao buscar histórico' };
+    return { success: true, response: '❌ Não foi possível processar sua solicitação' };
   }
 }
