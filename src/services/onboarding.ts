@@ -2,8 +2,16 @@ import { db } from '../db';
 import { users } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { askAI } from './ai';
+import { z } from 'zod';
 
 type OnboardingStep = 'initial' | 'weight_height' | 'routine' | 'objective' | 'complete';
+
+const weightHeightSchema = z.object({
+  weight: z.coerce.number().positive(),
+  height: z.coerce.number().positive(),
+});
+
+const routineSchema = z.record(z.string());
 
 export async function getOnboardingStep(userId: string): Promise<OnboardingStep> {
   const user = await db
@@ -38,27 +46,24 @@ export async function handleOnboarding(userId: string, userMessage: string): Pro
       
       try {
         const response = await askAI(prompt);
-        const parsed = JSON.parse(response);
+        const data = weightHeightSchema.parse(JSON.parse(response));
 
-        if (parsed.weight && parsed.height) {
-          await db
-            .update(users)
-            .set({ weight: parsed.weight.toString(), height: parsed.height.toString() })
-            .where(eq(users.id, userId));
+        await db
+          .update(users)
+          .set({ weight: data.weight.toString(), height: data.height.toString() })
+          .where(eq(users.id, userId));
 
-          return {
-            response: `✅ ${parsed.weight}kg, ${parsed.height}cm registrado!\n\nAgora, qual treino você faz cada dia? Ex: "seg: peito, ter: costas, qua: perna..."`,
-            step: 'routine',
-          };
-        }
+        return {
+          response: `✅ ${data.weight}kg, ${data.height}cm registrado!\n\nAgora, qual treino você faz cada dia? Ex: "seg: peito, ter: costas, qua: perna..."`,
+          step: 'routine',
+        };
       } catch (err) {
         console.error('Erro ao parsear weight_height:', err);
+        return {
+          response: `❌ Não foi possível processar sua solicitação`,
+          step: 'weight_height',
+        };
       }
-
-      return {
-        response: `❌ Não foi possível processar sua solicitação`,
-        step: 'weight_height',
-      };
     }
 
     case 'routine': {
@@ -66,7 +71,7 @@ export async function handleOnboarding(userId: string, userMessage: string): Pro
       
       try {
         const response = await askAI(prompt);
-        const routine = JSON.parse(response);
+        const routine = routineSchema.parse(JSON.parse(response));
 
         if (Object.keys(routine).length > 0) {
           await db
@@ -81,6 +86,10 @@ export async function handleOnboarding(userId: string, userMessage: string): Pro
         }
       } catch (err) {
         console.error('Erro ao parsear routine:', err);
+        return {
+          response: `❌ Não foi possível processar sua solicitação`,
+          step: 'routine',
+        };
       }
 
       return {
