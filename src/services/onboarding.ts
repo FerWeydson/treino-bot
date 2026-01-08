@@ -34,12 +34,6 @@ export async function getOnboardingStep(userId: string): Promise<OnboardingStep>
 
   if (!user) return 'initial';
   if (user.onboardingComplete === 'true') return 'complete';
-  
-  // Se onboarding está incompleto e nenhum dado preenchido, reiniciar
-  if (user.onboardingComplete === 'false' && !user.weight && !user.height && !user.weeklyRoutine && !user.objective) {
-    return 'initial';
-  }
-  
   if (!user.weight || !user.height) return 'weight_height';
   if (!user.weeklyRoutine) return 'routine';
   if (!user.objective) return 'objective';
