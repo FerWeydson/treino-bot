@@ -1,9 +1,7 @@
 import { db } from '../db';
 import { workouts, sets } from '../db/schema';
 import { eq, desc } from 'drizzle-orm';
-import { parserWorkoutMessage } from './parser';
-import { analyzeEvolution } from './analyzer';
-import { getOnboardingStep, handleOnboarding } from './onboarding';
+import { handleConversation } from './conversation';
 
 export interface CommandResult {
     response: string;
@@ -13,18 +11,19 @@ export interface CommandResult {
 export async function processMessage(userId: string, message: string): Promise<CommandResult> {
   const trimmed = message.trim();
 
-  // Checkar onboarding
-  const onboardingStep = await getOnboardingStep(userId);
-  if (onboardingStep !== 'complete') {
-    const result = await handleOnboarding(userId, trimmed);
-    return { success: true, response: result.response };
-  }
-
+  // Comandos específicos começam com /
   if (trimmed.startsWith('/')) {
     return handleCommand(userId, trimmed);
   }
 
-  return handleWorkoutRegistration(userId, trimmed);
+  // Tudo mais vai para conversa livre com IA
+  try {
+    const response = await handleConversation(userId, trimmed);
+    return { success: true, response };
+  } catch (err) {
+    console.error('Erro no processamento:', err);
+    return { success: true, response: '❌ Não foi possível processar sua solicitação' };
+  }
 }
 
 async function handleCommand(userId: string, message: string): Promise<CommandResult> {
@@ -50,56 +49,6 @@ async function handleCommand(userId: string, message: string): Promise<CommandRe
 
     default:
       return { success: true, response: '❌ Não foi possível processar sua solicitação' };
-  }
-}
-
-async function handleWorkoutRegistration(userId: string, message: string): Promise<CommandResult> {
-  const parseResult = await parserWorkoutMessage(message);
-
-  if (!parseResult.success) {
-    return {
-      success: true,
-      response: '❌ Não foi possível processar sua solicitação',
-    };
-  }
-
-  try {
-    const today = new Date().toISOString().split('T')[0];
-
-    const [workout] = await db
-      .insert(workouts)
-      .values({ userId, date: today })
-      .returning();
-
-    const setsToInsert = parseResult.exercises.map((ex, idx) => ({
-      workoutId: workout.id,
-      exercise: ex.exercise,
-      exerciseRaw: ex.exerciseRaw,
-      setsCount: ex.setsCount,
-      reps: ex.reps,
-      weight: ex.weightKg?.toString() || null,
-      orderIndex: idx,
-    }));
-
-    await db.insert(sets).values(setsToInsert);
-
-    const list = parseResult.exercises
-      .map(e => {
-        const weight = e.weightKg ? ` ${e.weightKg}kg` : '';
-        return `• ${e.exerciseRaw}: ${e.setsCount}x${e.reps}${weight}`;
-      })
-      .join('\n');
-
-    // Análise de evolução
-    const evolution = await analyzeEvolution(userId, parseResult.exercises);
-
-    return {
-      success: true,
-      response: `✅ *Treino registrado!*\n\n${list}\n\n📊 *Evolução:*\n${evolution}`,
-    };
-  } catch (err) {
-    console.error('Erro ao salvar treino:', err);
-    return { success: true, response: '❌ Não foi possível processar sua solicitação' };
   }
 }
 
