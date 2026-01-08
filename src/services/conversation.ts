@@ -5,9 +5,9 @@ import { askAI } from './ai';
 import fs from 'fs';
 import path from 'path';
 
-// Carrega prompt do sistema uma única vez
+// Carrega prompt do sistema uma única vez (ajustar caminho para funcionar em dist/)
 const SYSTEM_PROMPT = fs.readFileSync(
-  path.join(__dirname, '..', 'prompts', 'system.md'),
+  path.join(__dirname, '..', '..', 'src', 'prompts', 'system.md'),
   'utf-8'
 );
 
