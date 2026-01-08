@@ -34,47 +34,57 @@ export async function handleOnboarding(userId: string, userMessage: string): Pro
       };
 
     case 'weight_height': {
-      const prompt = `Extraia peso (kg) e altura (cm) desta mensagem: "${userMessage}"\nRetorne JSON: {"weight": número, "height": número}\nSe não conseguir extrair, retorne {"weight": null, "height": null}`;
-      const response = await askAI(prompt);
-      const parsed = JSON.parse(response);
+      const prompt = `Extraia peso (kg) e altura (cm) desta mensagem: "${userMessage}"\nRetorne APENAS JSON válido: {"weight": número, "height": número}\nEx: {"weight": 75, "height": 180}`;
+      
+      try {
+        const response = await askAI(prompt);
+        const parsed = JSON.parse(response);
 
-      if (parsed.weight && parsed.height) {
-        await db
-          .update(users)
-          .set({ weight: parsed.weight.toString(), height: parsed.height.toString() })
-          .where(eq(users.id, userId));
+        if (parsed.weight && parsed.height) {
+          await db
+            .update(users)
+            .set({ weight: parsed.weight.toString(), height: parsed.height.toString() })
+            .where(eq(users.id, userId));
 
-        return {
-          response: `✅ ${parsed.weight}kg, ${parsed.height}cm registrado!\n\nAgora, qual treino você faz cada dia? Ex: "seg: peito, ter: costas, qua: perna..."`,
-          step: 'routine',
-        };
+          return {
+            response: `✅ ${parsed.weight}kg, ${parsed.height}cm registrado!\n\nAgora, qual treino você faz cada dia? Ex: "seg: peito, ter: costas, qua: perna..."`,
+            step: 'routine',
+          };
+        }
+      } catch (err) {
+        console.error('Erro ao parsear weight_height:', err);
       }
 
       return {
-        response: `❌ Não consegui extrair peso e altura. Tenta de novo: "75kg 180cm"`,
+        response: `❌ Não foi possível processar sua solicitação`,
         step: 'weight_height',
       };
     }
 
     case 'routine': {
-      const prompt = `Extraia os dias da semana e exercícios desta mensagem: "${userMessage}"\nRetorne JSON objeto: {"monday": "peito", "tuesday": "costas", ...} ou {} se não conseguir`;
-      const response = await askAI(prompt);
-      const routine = JSON.parse(response);
+      const prompt = `Extraia os dias da semana e exercícios desta mensagem: "${userMessage}"\nRetorne APENAS JSON válido com os dias em inglês (monday, tuesday, etc): {"monday": "peito", "tuesday": "costas"}\nSe não conseguir, retorne {}`;
+      
+      try {
+        const response = await askAI(prompt);
+        const routine = JSON.parse(response);
 
-      if (Object.keys(routine).length > 0) {
-        await db
-          .update(users)
-          .set({ weeklyRoutine: routine })
-          .where(eq(users.id, userId));
+        if (Object.keys(routine).length > 0) {
+          await db
+            .update(users)
+            .set({ weeklyRoutine: routine })
+            .where(eq(users.id, userId));
 
-        return {
-          response: `✅ Rotina salva!\n\nPor fim, qual seu objetivo? Ex: "hipertrofia", "força", "emagrecer"`,
-          step: 'objective',
-        };
+          return {
+            response: `✅ Rotina salva!\n\nPor fim, qual seu objetivo? Ex: "hipertrofia", "força", "emagrecer"`,
+            step: 'objective',
+          };
+        }
+      } catch (err) {
+        console.error('Erro ao parsear routine:', err);
       }
 
       return {
-        response: `❌ Não consegui extrair os dias. Tenta assim: "seg: peito, ter: costas"`,
+        response: `❌ Não foi possível processar sua solicitação`,
         step: 'routine',
       };
     }
